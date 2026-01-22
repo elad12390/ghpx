@@ -1,0 +1,37 @@
+{
+  "name": "ghpx",
+  "version": "1.0.0",
+  "description": "npx wrapper for GitHub Package Registry - works around npm 11's npx bug with scoped packages",
+  "main": "bin/ghpx.js",
+  "bin": {
+    "ghpx": "./bin/ghpx.js"
+  },
+  "scripts": {
+    "test": "node bin/ghpx.js --help"
+  },
+  "keywords": [
+    "npx",
+    "github",
+    "github-packages",
+    "npm",
+    "cli",
+    "registry",
+    "scoped-packages"
+  ],
+  "author": "Elad Ben Haim",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eladbenhaim/ghpx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eladbenhaim/ghpx/issues"
+  },
+  "homepage": "https://github.com/eladbenhaim/ghpx#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "bin"
+  ]
+}
