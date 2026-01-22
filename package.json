@@ -1,13 +1,13 @@
 {
   "name": "ghpx",
-  "version": "1.0.0",
-  "description": "npx wrapper for GitHub Package Registry - works around npm 11's npx bug with scoped packages",
+  "version": "1.0.2",
+  "description": "Drop-in npx replacement that fixes npm 11's bug with scoped packages from GitHub Package Registry",
   "main": "bin/ghpx.js",
   "bin": {
     "ghpx": "./bin/ghpx.js"
   },
   "scripts": {
-    "test": "node bin/ghpx.js --help"
+    "test": "node bin/ghpx.js --ghpx-version"
   },
   "keywords": [
     "npx",

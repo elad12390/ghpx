@@ -5,34 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const VERSION = '1.0.0';
-
-function showHelp() {
-  console.log(`
-ghpx v${VERSION} - npx wrapper for GitHub Package Registry
-
-Usage: ghpx @scope/package-name[@version] [args...]
-
-Works around npm 11's npx bug with scoped packages from alternative registries
-(like GitHub Package Registry).
-
-Examples:
-  ghpx @myorg/my-cli --help
-  ghpx @myorg/my-cli@latest
-  ghpx @myorg/my-cli@1.2.3 some-command
-
-Options:
-  --help, -h     Show this help message
-  --version, -v  Show version
-  --clear-cache  Clear all cached packages
-
-Cache location: ~/.ghpx-cache/
-`);
-}
-
-function showVersion() {
-  console.log(`ghpx v${VERSION}`);
-}
+const VERSION = '1.0.2';
 
 function getCacheDir() {
   return path.join(os.homedir(), '.ghpx-cache');
@@ -46,6 +19,45 @@ function clearCache() {
   } else {
     console.log('Cache directory does not exist:', cacheDir);
   }
+}
+
+function extractNpmFlags(args) {
+  const npmFlags = [];
+  const remainingArgs = [];
+  
+  const flagsWithValues = ['-p', '--package', '-c', '--call', '--npm', '--node-arg', '-w', '--workspace', '--loglevel'];
+  const standaloneFlags = [
+    '-y', '--yes', '-n', '--no', '--no-install', '--ignore-existing',
+    '-q', '--quiet', '--silent', '-d', '-dd', '-ddd', '--verbose',
+    '--workspaces', '--include-workspace-root'
+  ];
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (flagsWithValues.includes(arg)) {
+      npmFlags.push(arg);
+      if (i + 1 < args.length) {
+        npmFlags.push(args[++i]);
+      }
+    } else if (standaloneFlags.includes(arg) || arg.startsWith('--loglevel=')) {
+      npmFlags.push(arg);
+    } else {
+      remainingArgs.push(arg);
+    }
+  }
+  
+  return { npmFlags, remainingArgs };
+}
+
+function findPackageArg(args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg.startsWith('-')) {
+      return { index: i, value: arg };
+    }
+  }
+  return null;
 }
 
 function parsePackage(packageArg) {
@@ -80,7 +92,7 @@ function needsInstall(installDir, packageArg) {
   return false;
 }
 
-function installPackage(installDir, packageArg) {
+function installPackage(installDir, packageArg, npmFlags) {
   fs.mkdirSync(installDir, { recursive: true });
   
   const pkgJsonPath = path.join(installDir, 'package.json');
@@ -91,14 +103,20 @@ function installPackage(installDir, packageArg) {
   };
   fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
   
+  const installFlags = npmFlags.filter(f => 
+    f === '--verbose' || f === '-d' || f === '-dd' || f === '-ddd' ||
+    f === '-q' || f === '--quiet' || f === '--silent' ||
+    f.startsWith('--loglevel')
+  );
+  
+  const cmd = `npm install ${packageArg} ${installFlags.join(' ')}`.trim();
+  
   try {
-    execSync(`npm install ${packageArg}`, {
+    execSync(cmd, {
       cwd: installDir,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: 'inherit'
     });
   } catch (error) {
-    console.error(`Error installing ${packageArg}:`);
-    console.error(error.stderr?.toString() || error.message);
     process.exit(1);
   }
 }
@@ -133,32 +151,54 @@ function runBinary(binPath, args) {
   });
 }
 
+function passToNpx(args) {
+  const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  const child = spawn(npxCmd, args, {
+    stdio: 'inherit',
+    shell: process.platform === 'win32'
+  });
+  
+  child.on('error', (err) => {
+    console.error(`Error executing npx: ${err.message}`);
+    process.exit(1);
+  });
+  
+  child.on('close', (code) => {
+    process.exit(code || 0);
+  });
+}
+
 function main() {
   const args = process.argv.slice(2);
   
-  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
-    showHelp();
+  if (args.length === 0) {
+    passToNpx(args);
+    return;
+  }
+  
+  if (args[0] === '--ghpx-version') {
+    console.log(`ghpx v${VERSION}`);
     process.exit(0);
   }
   
-  if (args[0] === '--version' || args[0] === '-v') {
-    showVersion();
-    process.exit(0);
-  }
-  
-  if (args[0] === '--clear-cache') {
+  if (args[0] === '--ghpx-clear-cache') {
     clearCache();
     process.exit(0);
   }
   
-  const packageArg = args[0];
-  const packageArgs = args.slice(1);
+  const { npmFlags, remainingArgs } = extractNpmFlags(args);
+  const packageInfo = findPackageArg(remainingArgs);
   
-  const parsed = parsePackage(packageArg);
+  if (!packageInfo) {
+    passToNpx(args);
+    return;
+  }
+  
+  const parsed = parsePackage(packageInfo.value);
+  
   if (!parsed) {
-    console.error('Error: Package must be scoped (@scope/package-name)');
-    console.error('Usage: ghpx @scope/package-name [args...]');
-    process.exit(1);
+    passToNpx(args);
+    return;
   }
   
   const { scope, pkgNameWithVersion, binName, fullPackage } = parsed;
@@ -166,7 +206,7 @@ function main() {
   
   if (needsInstall(installDir, fullPackage)) {
     console.error(`Installing ${fullPackage}...`);
-    installPackage(installDir, fullPackage);
+    installPackage(installDir, fullPackage, npmFlags);
   }
   
   const binPath = findBinary(installDir, binName);
@@ -176,7 +216,8 @@ function main() {
     process.exit(1);
   }
   
-  runBinary(binPath, packageArgs);
+  const binaryArgs = remainingArgs.slice(packageInfo.index + 1);
+  runBinary(binPath, binaryArgs);
 }
 
 main();
