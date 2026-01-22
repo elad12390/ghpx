@@ -22,12 +22,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/eladbenhaim/ghpx.git"
+    "url": "git+https://github.com/elad12390/ghpx.git"
   },
   "bugs": {
-    "url": "https://github.com/eladbenhaim/ghpx/issues"
+    "url": "https://github.com/elad12390/ghpx/issues"
   },
-  "homepage": "https://github.com/eladbenhaim/ghpx#readme",
+  "homepage": "https://github.com/elad12390/ghpx#readme",
   "engines": {
     "node": ">=14.0.0"
   },
